@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1.5.1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-gray-100">
+<div id ="roomNoDiv" style ="display:none" th:text="${room.roomNo}"></div>
+<div class="container mx-auto p-4">
+    <div class="bg-white p-6 rounded-lg shadow-lg">
+        <div id="chatWindow" class="border p-4 h-80 overflow-y-scroll mb-4 rounded bg-gray-50"></div>
+        <div class="flex">
+            <button id="channelInfoBtn" class="bg-purple-500 text-white p-2 rounded">Channel</button>
+            <input id="messageInput" type="text" placeholder="Enter your message" class="border p-2 flex-grow rounded-l" />
+            <button id="sendBtn" class="bg-green-500 text-white p-2 rounded-r">Send</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const roomNo = document.getElementById('roomNoDiv').innerText.trim();
+    let stompClient = null;
+
+    function connect(roomNo) {
+
+
+        const socket = new SockJS(`/ws?room=${roomNo}`);
+        stompClient = Stomp.over(socket);
+        stompClient.connect({}, () => {
+            console.log('Connected to room ' + roomNo);
+
+            // 채널에 구독
+            stompClient.subscribe('/sub/' + roomNo, (message) => {
+                showMessage(JSON.parse(message.body));
+            });
+
+            // 사용자 추가 메시지 전송
+            const joinMessage = {
+                room_no: roomNo,
+                sender: 'Admin',
+                content: `new User joined the channel`,
+                type: 'USER_JOIN'
+            };
+            stompClient.send("/pub/user.join", {}, JSON.stringify(joinMessage));
+        });
+    }
+
+    function showMessage(message) {
+        const chatWindow = document.getElementById('chatWindow');
+        const messageElement = document.createElement('div');
+        messageElement.classList.add('mb-2');
+
+        if (message && message.data && message.data.sender && message.data.content) {
+            messageElement.textContent = `${message.data.sender}: ${message.data.content}`;
+        } else {
+            messageElement.textContent = 'Invalid message format';
+        }
+
+        chatWindow.appendChild(messageElement);
+        chatWindow.scrollTop = chatWindow.scrollHeight; // 자동 스크롤 처리
+    }
+
+    document.getElementById('sendBtn').addEventListener('click', () => {
+
+        console.log("sdsd");
+        const messageInput = document.getElementById('messageInput');
+        const messageContent = messageInput.value.trim();
+        if (messageContent !== '') {
+            const message = {
+                roomNo: roomNo,
+                sender: 'User', // 사용자 이름 또는 ID 등
+                content: messageContent
+            };
+            stompClient.send('/pub/chat.send', {}, JSON.stringify(message));
+            messageInput.value = ''; // 메시지 입력창 비우기
+        }
+    });
+
+    connect(roomNo); // 페이지 로드 시 WebSocket 연결
+
+</script>
+
+
+</body>
+
+</html>
